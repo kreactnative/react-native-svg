@@ -16,18 +16,8 @@
     NSMutableDictionary<NSString *, RNSVGNode *> *_clipPaths;
     NSMutableDictionary<NSString *, RNSVGNode *> *_templates;
     NSMutableDictionary<NSString *, RNSVGPainter *> *_painters;
+    CGRect _boundingBox;
     CGAffineTransform _viewBoxTransform;
-    CGAffineTransform _invviewBoxTransform;
-}
-
-- (instancetype)initWithFrame:(CGRect)frame
-{
-  if (self = [super initWithFrame:frame]) {
-    // This is necessary to ensure that [self setNeedsDisplay] actually triggers
-    // a redraw when our parent transitions between hidden and visible.
-    self.contentMode = UIViewContentModeRedraw;
-  }
-  return self;
 }
 
 - (void)insertReactSubview:(UIView *)subview atIndex:(NSInteger)atIndex
@@ -58,7 +48,7 @@
     if (minX == _minX) {
         return;
     }
-
+    
     [self invalidate];
     _minX = minX;
 }
@@ -68,7 +58,7 @@
     if (minY == _minY) {
         return;
     }
-
+    
     [self invalidate];
     _minY = minY;
 }
@@ -78,7 +68,7 @@
     if (vbWidth == _vbWidth) {
         return;
     }
-
+    
     [self invalidate];
     _vbWidth = vbWidth;
 }
@@ -88,29 +78,9 @@
     if (_vbHeight == vbHeight) {
         return;
     }
-
+    
     [self invalidate];
     _vbHeight = vbHeight;
-}
-
-- (void)setBBWidth:(NSString *)bbWidth
-{
-    if ([bbWidth isEqualToString:_bbWidth]) {
-        return;
-    }
-
-    [self invalidate];
-    _bbWidth = bbWidth;
-}
-
-- (void)setBBHeight:(NSString *)bbHeight
-{
-    if ([bbHeight isEqualToString:_bbHeight]) {
-        return;
-    }
-
-    [self invalidate];
-    _bbHeight = bbHeight;
 }
 
 - (void)setAlign:(NSString *)align
@@ -118,7 +88,7 @@
     if ([align isEqualToString:_align]) {
         return;
     }
-
+    
     [self invalidate];
     _align = align;
 }
@@ -128,33 +98,9 @@
     if (meetOrSlice == _meetOrSlice) {
         return;
     }
-
+    
     [self invalidate];
     _meetOrSlice = meetOrSlice;
-}
-
-- (void)drawToContext:(CGContextRef)context withRect:(CGRect)rect {
-
-    self.initialCTM = CGContextGetCTM(context);
-    self.invInitialCTM = CGAffineTransformInvert(self.initialCTM);
-    if (self.align) {
-        _viewBoxTransform = [RNSVGViewBox getTransform:CGRectMake(self.minX, self.minY, self.vbWidth, self.vbHeight)
-                                                 eRect:rect
-                                                 align:self.align
-                                           meetOrSlice:self.meetOrSlice];
-        _invviewBoxTransform = CGAffineTransformInvert(_viewBoxTransform);
-        CGContextConcatCTM(context, _viewBoxTransform);
-    }
-
-    for (UIView *node in self.subviews) {
-        if ([node isKindOfClass:[RNSVGNode class]]) {
-            RNSVGNode *svg = (RNSVGNode *)node;
-            [svg renderTo:context
-                     rect:rect];
-        } else {
-            [node drawRect:rect];
-        }
-    }
 }
 
 - (void)drawRect:(CGRect)rect
@@ -164,38 +110,48 @@
     _painters = nil;
     _boundingBox = rect;
     CGContextRef context = UIGraphicsGetCurrentContext();
-
-    for (UIView *node in self.subviews) {
+    
+    if (self.align) {
+        _viewBoxTransform = [RNSVGViewBox getTransform:CGRectMake(self.minX, self.minY, self.vbWidth, self.vbHeight)
+                                                 eRect:rect
+                                                 align:self.align
+                                           meetOrSlice:self.meetOrSlice];
+        CGContextConcatCTM(context, _viewBoxTransform);
+    }
+    
+    for (RNSVGNode *node in self.subviews) {
         if ([node isKindOfClass:[RNSVGNode class]]) {
-            RNSVGNode *svg = (RNSVGNode *)node;
-            if (svg.responsible && !self.responsible) {
+            if (node.responsible && !self.responsible) {
                 self.responsible = YES;
             }
-
-            [svg parseReference];
+            
+            [node parseReference];
         }
     }
-
-    [self drawToContext:context withRect:rect];
+    
+    for (RNSVGNode *node in self.subviews) {
+        if ([node isKindOfClass:[RNSVGNode class]]) {
+            [node renderTo:context];
+        }
+    }
 }
 
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event
 {
     if (self.align) {
-        CGPoint transformed = CGPointApplyAffineTransform(point, _invviewBoxTransform);
         for (RNSVGNode *node in [self.subviews reverseObjectEnumerator]) {
             if (![node isKindOfClass:[RNSVGNode class]]) {
                 continue;
             }
-
+            
             if (event) {
                 node.active = NO;
             } else if (node.active) {
                 return node;
             }
-
-            UIView *hitChild = [node hitTest:transformed withEvent:event];
-
+            
+            UIView *hitChild = [node hitTest: point withEvent:event withTransform:_viewBoxTransform];
+            
             if (hitChild) {
                 node.active = YES;
                 return (node.responsible || (node != hitChild)) ? hitChild : self;

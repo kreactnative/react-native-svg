@@ -1,5 +1,5 @@
 {
-    "version": "6.4.1",
+    "version": "6.1.0",
     "name": "react-native-svg",
     "description": "SVG library for react-native",
     "repository": {
@@ -24,7 +24,7 @@
     "peerDependencies": {
         "react-native": ">=0.50.0",
         "react": "*",
-        "prop-types": "^15.5.7"
+        "prop-types": "^15.5.8"
     },
     "dependencies": {
         "color": "^2.0.1",

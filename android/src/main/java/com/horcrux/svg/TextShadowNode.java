@@ -26,7 +26,7 @@ import javax.annotation.Nullable;
 
 class TextShadowNode extends GroupShadowNode {
     String mTextLength = null;
-    private String mBaselineShift = null;
+    String mBaselineShift = null;
     TextLengthAdjust mLengthAdjust = TextLengthAdjust.spacing;
     private AlignmentBaseline mAlignmentBaseline;
     private @Nullable ReadableArray mPositionX;
@@ -177,10 +177,9 @@ class TextShadowNode extends GroupShadowNode {
 
     void releaseCachedPath() {
         traverseChildren(new NodeRunnable() {
-            public void run(ReactShadowNode node) {
-                if (node instanceof TextShadowNode) {
-                    ((TextShadowNode)node).releaseCachedPath();
-                }
+            public void run(VirtualNode node) {
+                TextShadowNode text = (TextShadowNode)node;
+                text.releaseCachedPath();
             }
         });
     }

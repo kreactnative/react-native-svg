@@ -10,7 +10,7 @@
 
 @implementation RNSVGGroup
 {
-    RNSVGGlyphContext *_glyphContext;
+    GlyphContext *_glyphContext;
 }
 
 - (void)setFont:(NSDictionary*)font
@@ -23,53 +23,34 @@
     _font = font;
 }
 
-- (void)renderLayerTo:(CGContextRef)context rect:(CGRect)rect
+- (void)renderLayerTo:(CGContextRef)context
 {
     [self clip:context];
     [self setupGlyphContext:context];
-    [self renderGroupTo:context rect:rect];
+    [self renderGroupTo:context];
 }
 
-- (void)renderGroupTo:(CGContextRef)context rect:(CGRect)rect
+- (void)renderGroupTo:(CGContextRef)context
 {
     [self pushGlyphContext];
-    
-    __block CGRect groupRect = CGRectNull;
+    RNSVGSvgView* svg = [self getSvgView];
+    [self traverseSubviews:^(RNSVGNode *node) {
+        if (node.responsible && !svg.responsible) {
+            svg.responsible = YES;
+        }
 
-    [self traverseSubviews:^(UIView *node) {
-        if ([node isKindOfClass:[RNSVGNode class]]) {
-            RNSVGNode* svgNode = (RNSVGNode*)node;
-            if (svgNode.responsible && !self.svgView.responsible) {
-                self.svgView.responsible = YES;
-            }
+        if ([node isKindOfClass:[RNSVGRenderable class]]) {
+            [(RNSVGRenderable*)node mergeProperties:self];
+        }
 
-            if ([node isKindOfClass:[RNSVGRenderable class]]) {
-                [(RNSVGRenderable*)node mergeProperties:self];
-            }
+        [node renderTo:context];
 
-            [svgNode renderTo:context rect:rect];
-            
-            CGRect nodeRect = svgNode.clientRect;
-            if (!CGRectIsEmpty(nodeRect)) {
-                groupRect = CGRectUnion(groupRect, nodeRect);
-            }
-
-            if ([node isKindOfClass:[RNSVGRenderable class]]) {
-                [(RNSVGRenderable*)node resetProperties];
-            }
-        } else if ([node isKindOfClass:[RNSVGSvgView class]]) {
-            RNSVGSvgView* svgView = (RNSVGSvgView*)node;
-            CGRect rect = CGRectMake(0, 0, [svgView.bbWidth floatValue], [svgView.bbHeight floatValue]);
-            CGContextClipToRect(context, rect);
-            [svgView drawToContext:context withRect:(CGRect)rect];
-        } else {
-            [node drawRect:rect];
+        if ([node isKindOfClass:[RNSVGRenderable class]]) {
+            [(RNSVGRenderable*)node resetProperties];
         }
 
         return YES;
     }];
-    [self setHitArea:[self getPath:context]];
-    self.clientRect = groupRect;
     [self popGlyphContext];
 }
 
@@ -80,60 +61,61 @@
     CGFloat width = CGRectGetWidth(clipBounds);
     CGFloat height = CGRectGetHeight(clipBounds);
 
-    _glyphContext = [[RNSVGGlyphContext alloc] initWithScale:1 width:width
-                                                   height:height];
+    _glyphContext = [[GlyphContext alloc] initWithScale:1 width:width
+                                                           height:height];
 }
 
-- (RNSVGGlyphContext *)getGlyphContext
+- (GlyphContext *)getGlyphContext
 {
     return _glyphContext;
 }
 
 - (void)pushGlyphContext
 {
-    __weak typeof(self) weakSelf = self;
-    [[self.textRoot getGlyphContext] pushContext:weakSelf font:self.font];
+    [[[self getTextRoot] getGlyphContext] pushContext:self font:self.font];
 }
 
 - (void)popGlyphContext
 {
-    [[self.textRoot getGlyphContext] popContext];
+    [[[self getTextRoot] getGlyphContext] popContext];
 }
 
-- (void)renderPathTo:(CGContextRef)context rect:(CGRect)rect
+- (void)renderPathTo:(CGContextRef)context
 {
-    [super renderLayerTo:context rect:rect];
+    [super renderLayerTo:context];
 }
 
 - (CGPathRef)getPath:(CGContextRef)context
 {
     CGMutablePathRef __block path = CGPathCreateMutable();
     [self traverseSubviews:^(RNSVGNode *node) {
-        if ([node isKindOfClass:[RNSVGNode class]]) {
-            CGAffineTransform transform = node.matrix;
-            CGPathAddPath(path, &transform, [node getPath:context]);
-        }
+        CGAffineTransform transform = node.matrix;
+        CGPathAddPath(path, &transform, [node getPath:context]);
         return YES;
     }];
 
     return (CGPathRef)CFAutorelease(path);
 }
 
-- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event withTransform:(CGAffineTransform)transform
 {
-    CGPoint transformed = CGPointApplyAffineTransform(point, self.invmatrix);
-    
-    CGPathRef clip = [self getClipPath];
-    if (clip && !CGPathContainsPoint(clip, nil, transformed, self.clipRule == kRNSVGCGFCRuleEvenodd)) {
-        return nil;
+    UIView *hitSelf = [super hitTest:point withEvent:event withTransform:transform];
+    if (hitSelf) {
+        return hitSelf;
     }
-    
-    if (!event) {
-        NSPredicate *const anyActive = [NSPredicate predicateWithFormat:@"active == TRUE"];
-        NSArray *const filtered = [self.subviews filteredArrayUsingPredicate:anyActive];
-        if ([filtered count] != 0) {
-            return filtered.firstObject;
+
+    CGAffineTransform matrix = CGAffineTransformConcat(self.matrix, transform);
+
+    CGPathRef clip = [self getClipPath];
+    if (clip) {
+        CGPathRef transformedClipPath = CGPathCreateCopyByTransformingPath(clip, &matrix);
+        BOOL insideClipPath = CGPathContainsPoint(clip, nil, point, self.clipRule == kRNSVGCGFCRuleEvenodd);
+        CGPathRelease(transformedClipPath);
+
+        if (!insideClipPath) {
+            return nil;
         }
+
     }
 
     for (RNSVGNode *node in [self.subviews reverseObjectEnumerator]) {
@@ -147,33 +129,25 @@
             return node;
         }
 
-        UIView *hitChild = [node hitTest:transformed withEvent:event];
+        UIView *hitChild = [node hitTest: point withEvent:event withTransform:matrix];
 
         if (hitChild) {
             node.active = YES;
             return (node.responsible || (node != hitChild)) ? hitChild : self;
         }
     }
-    
-    UIView *hitSelf = [super hitTest:transformed withEvent:event];
-    if (hitSelf) {
-        return hitSelf;
-    }
-    
     return nil;
 }
 
 - (void)parseReference
 {
     if (self.name) {
-        typeof(self) __weak weakSelf = self;
-        [self.svgView defineTemplate:weakSelf templateName:self.name];
+        RNSVGSvgView* svg = [self getSvgView];
+        [svg defineTemplate:self templateName:self.name];
     }
 
     [self traverseSubviews:^(__kindof RNSVGNode *node) {
-        if ([node isKindOfClass:[RNSVGNode class]]) {
-            [node parseReference];
-        }
+        [node parseReference];
         return YES;
     }];
 }

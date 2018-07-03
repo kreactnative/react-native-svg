@@ -32,11 +32,12 @@
     [painter setTransform:self.gradientTransform];
     [painter setRadialGradientColors:self.gradient];
     
+    RNSVGSvgView *svg = [self getSvgView];
     if (self.gradientUnits == kRNSVGUnitsUserSpaceOnUse) {
-        [painter setUserSpaceBoundingBox:[self.svgView getContextBounds]];
+        [painter setUserSpaceBoundingBox:[svg getContextBounds]];
     }
     
-    [self.svgView definePainter:painter painterName:self.name];
+    [svg definePainter:painter painterName:self.name];
 }
 
 @end

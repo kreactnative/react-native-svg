@@ -32,7 +32,6 @@ import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.common.ReactConstants;
 import com.facebook.react.uimanager.annotations.ReactProp;
 import com.facebook.react.views.imagehelper.ResourceDrawableIdHelper;
-import com.facebook.react.views.imagehelper.ImageSource;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -51,7 +50,6 @@ class ImageShadowNode extends RenderableShadowNode {
     private String mW;
     private String mH;
     private Uri mUri;
-    private String uriString;
     private int mImageWidth;
     private int mImageHeight;
     private String mAlign;
@@ -92,7 +90,7 @@ class ImageShadowNode extends RenderableShadowNode {
     @ReactProp(name = "src")
     public void setSrc(@Nullable ReadableMap src) {
         if (src != null) {
-            uriString = src.getString("uri");
+            String uriString = src.getString("uri");
 
             if (uriString == null || uriString.isEmpty()) {
                 //TODO: give warning about this
@@ -149,9 +147,7 @@ class ImageShadowNode extends RenderableShadowNode {
     @Override
     public void draw(final Canvas canvas, final Paint paint, final float opacity) {
         if (!mLoading.get()) {
-            final ImageSource imageSource = new ImageSource(getThemedContext(), uriString);
-
-            final ImageRequest request = ImageRequestBuilder.newBuilderWithSource(imageSource.getUri()).build();
+            final ImageRequest request = ImageRequestBuilder.newBuilderWithSource(mUri).build();
             if (Fresco.getImagePipeline().isInBitmapMemoryCache(request)) {
                 tryRender(request, canvas, paint, opacity * mOpacity);
             } else {
@@ -174,10 +170,7 @@ class ImageShadowNode extends RenderableShadowNode {
                                  @Override
                                  public void onNewResultImpl(Bitmap bitmap) {
                                      mLoading.set(false);
-                                     SvgViewShadowNode shadowNode = getSvgShadowNode();
-                                     if(shadowNode != null) {
-                                         shadowNode.markUpdated();
-                                     }
+                                     bitmapTryRender(bitmap, canvas, paint, opacity * mOpacity);
                                  }
 
                                  @Override

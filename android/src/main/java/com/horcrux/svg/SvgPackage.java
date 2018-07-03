@@ -49,7 +49,6 @@ public class SvgPackage implements ReactPackage {
         return Collections.<NativeModule>singletonList(new SvgViewModule(reactContext));
     }
 
-    @SuppressWarnings("unused")
     public List<Class<? extends JavaScriptModule>> createJSModules() {
         return Collections.emptyList();
     }

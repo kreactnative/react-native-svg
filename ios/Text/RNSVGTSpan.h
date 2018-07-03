@@ -9,6 +9,12 @@
 #import <Foundation/Foundation.h>
 #import <CoreText/CoreText.h>
 #import "RNSVGText.h"
+#import "TextPathSide.h"
+#import "TextPathMethod.h"
+#import "TextPathMidLine.h"
+#import "TextPathSpacing.h"
+#import "TextLengthAdjust.h"
+#import "AlignmentBaseline.h"
 
 @interface RNSVGTSpan : RNSVGText
 

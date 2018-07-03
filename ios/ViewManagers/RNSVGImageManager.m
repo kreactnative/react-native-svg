@@ -17,10 +17,7 @@ RCT_EXPORT_MODULE()
 
 - (RNSVGRenderable *)node
 {
-    RNSVGImage *svgImage = [RNSVGImage new];
-    svgImage.bridge = self.bridge;
-    
-    return svgImage;
+    return [RNSVGImage new];
 }
 
 RCT_EXPORT_VIEW_PROPERTY(x, NSString)

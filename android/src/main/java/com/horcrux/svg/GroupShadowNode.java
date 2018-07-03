@@ -10,8 +10,10 @@
 package com.horcrux.svg;
 
 import android.graphics.Canvas;
+import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Point;
 import android.graphics.RectF;
 
 import com.facebook.react.bridge.ReadableMap;
@@ -69,42 +71,27 @@ class GroupShadowNode extends RenderableShadowNode {
         pushGlyphContext();
         final SvgViewShadowNode svg = getSvgShadowNode();
         final GroupShadowNode self = this;
-        final RectF groupRect = new RectF();
         traverseChildren(new NodeRunnable() {
-            public void run(ReactShadowNode lNode) {
-                if (lNode instanceof VirtualNode) {
-                    VirtualNode node = ((VirtualNode)lNode);
-                    if (node instanceof RenderableShadowNode) {
-                        ((RenderableShadowNode)node).mergeProperties(self);
-                    }
+            public void run(VirtualNode node) {
+                if (node instanceof RenderableShadowNode) {
+                    ((RenderableShadowNode)node).mergeProperties(self);
+                }
 
-                    int count = node.saveAndSetupCanvas(canvas);
-                    node.draw(canvas, paint, opacity * mOpacity);
-                    RectF r = node.getClientRect();
-                    if (r != null) {
-                        groupRect.union(r);
-                    }
+                int count = node.saveAndSetupCanvas(canvas);
+                node.draw(canvas, paint, opacity * mOpacity);
+                node.restoreCanvas(canvas, count);
 
-                    node.restoreCanvas(canvas, count);
+                if (node instanceof RenderableShadowNode) {
+                    ((RenderableShadowNode)node).resetProperties();
+                }
 
-                    if (node instanceof RenderableShadowNode) {
-                        ((RenderableShadowNode)node).resetProperties();
-                    }
+                node.markUpdateSeen();
 
-                    node.markUpdateSeen();
-
-                    if (node.isResponsible()) {
-                        svg.enableTouchEvents();
-                    }
-                } else if (lNode instanceof SvgViewShadowNode) {
-                    SvgViewShadowNode svgView = (SvgViewShadowNode)lNode;
-                    svgView.drawChildren(canvas);
-                } else {
-                    lNode.calculateLayout();
+                if (node.isResponsible()) {
+                    svg.enableTouchEvents();
                 }
             }
         });
-        this.setClientRect(groupRect);
         popGlyphContext();
     }
 
@@ -117,10 +104,8 @@ class GroupShadowNode extends RenderableShadowNode {
         final Path path = new Path();
 
         traverseChildren(new NodeRunnable() {
-            public void run(ReactShadowNode node) {
-                if (node instanceof VirtualNode) {
-                    path.addPath(((VirtualNode)node).getPath(canvas, paint));
-                }
+            public void run(VirtualNode node) {
+                path.addPath(node.getPath(canvas, paint));
             }
         });
 
@@ -128,26 +113,22 @@ class GroupShadowNode extends RenderableShadowNode {
     }
 
     @Override
-    public int hitTest(final float[] src) {
-        if (!mInvertible) {
-            return -1;
+    public int hitTest(final Point point, final @Nullable Matrix matrix) {
+        int hitSelf = super.hitTest(point, matrix);
+        if (hitSelf != -1) {
+            return hitSelf;
         }
 
-        float[] dst = new float[2];
-        mInvMatrix.mapPoints(dst, src);
+        Matrix groupMatrix = new Matrix(mMatrix);
 
-        int x = Math.round(dst[0]);
-        int y = Math.round(dst[1]);
+        if (matrix != null) {
+            groupMatrix.postConcat(matrix);
+        }
 
         Path clipPath = getClipPath();
-        if (clipPath != null) {
-            if (mClipRegionPath != clipPath) {
-                mClipRegionPath = clipPath;
-                mClipRegion = getRegion(clipPath);
-            }
-            if (!mClipRegion.contains(x, y)) {
-                return -1;
-            }
+
+        if (clipPath != null && !pathContainsPoint(clipPath, groupMatrix, point)) {
+            return -1;
         }
 
         for (int i = getChildCount() - 1; i >= 0; i--) {
@@ -158,7 +139,7 @@ class GroupShadowNode extends RenderableShadowNode {
 
             VirtualNode node = (VirtualNode) child;
 
-            int hitChild = node.hitTest(dst);
+            int hitChild = node.hitTest(point, groupMatrix);
             if (hitChild != -1) {
                 return (node.isResponsible() || hitChild != child.getReactTag()) ? hitChild : getReactTag();
             }
@@ -173,10 +154,8 @@ class GroupShadowNode extends RenderableShadowNode {
         }
 
         traverseChildren(new NodeRunnable() {
-            public void run(ReactShadowNode node) {
-                if (node instanceof VirtualNode) {
-                    ((VirtualNode)node).saveDefinition();
-                }
+            public void run(VirtualNode node) {
+                node.saveDefinition();
             }
         });
     }
@@ -184,7 +163,7 @@ class GroupShadowNode extends RenderableShadowNode {
     @Override
     public void resetProperties() {
         traverseChildren(new NodeRunnable() {
-            public void run(ReactShadowNode node) {
+            public void run(VirtualNode node) {
                 if (node instanceof RenderableShadowNode) {
                     ((RenderableShadowNode)node).resetProperties();
                 }

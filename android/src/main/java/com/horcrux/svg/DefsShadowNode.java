@@ -12,8 +12,6 @@ package com.horcrux.svg;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 
-import com.facebook.react.uimanager.ReactShadowNode;
-
 /**
  * Shadow node for virtual Defs view
  */
@@ -22,13 +20,9 @@ class DefsShadowNode extends DefinitionShadowNode {
     @Override
     public void draw(Canvas canvas, Paint paint, float opacity) {
         NodeRunnable markUpdateSeenRecursive = new NodeRunnable() {
-            public void run(ReactShadowNode node) {
+            public void run(VirtualNode node) {
                 node.markUpdateSeen();
-                if (node instanceof VirtualNode) {
-                    ((VirtualNode) node).traverseChildren(this);
-                } else if (node instanceof SvgViewShadowNode) {
-                    ((SvgViewShadowNode) node).traverseChildren(this);
-                }
+                node.traverseChildren(this);
             }
         };
         traverseChildren(markUpdateSeenRecursive);
@@ -36,10 +30,8 @@ class DefsShadowNode extends DefinitionShadowNode {
 
     void saveDefinition() {
         traverseChildren(new NodeRunnable() {
-            public void run(ReactShadowNode node) {
-                if (node instanceof VirtualNode) {
-                    ((VirtualNode)node).saveDefinition();
-                }
+            public void run(VirtualNode node) {
+                node.saveDefinition();
             }
         });
     }

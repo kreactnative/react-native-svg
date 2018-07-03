@@ -28,7 +28,6 @@ import com.facebook.react.uimanager.annotations.ReactProp;
 import java.io.ByteArrayOutputStream;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Stack;
 
 /**
  * Shadow node for RNSVG virtual tree root - RNSVGSvgView
@@ -46,13 +45,9 @@ public class SvgViewShadowNode extends LayoutShadowNode {
     private float mMinY;
     private float mVbWidth;
     private float mVbHeight;
-    private String mbbWidth;
-    private String mbbHeight;
     private String mAlign;
     private int mMeetOrSlice;
-    private Matrix mInvViewBoxMatrix = new Matrix();
-    private boolean mInvertible = true;
-
+    private Matrix mViewBoxMatrix;
 
     public SvgViewShadowNode() {
         mScale = DisplayMetricsHolder.getScreenDisplayMetrics().density;
@@ -82,18 +77,6 @@ public class SvgViewShadowNode extends LayoutShadowNode {
         markUpdated();
     }
 
-    @ReactProp(name = "bbWidth")
-    public void setVbWidth(String bbWidth) {
-        mbbWidth = bbWidth;
-        markUpdated();
-    }
-
-    @ReactProp(name = "bbHeight")
-    public void setVbHeight(String bbHeight) {
-        mbbHeight = bbHeight;
-        markUpdated();
-    }
-
     @ReactProp(name = "align")
     public void setAlign(String align) {
         mAlign = align;
@@ -113,7 +96,7 @@ public class SvgViewShadowNode extends LayoutShadowNode {
 
     @Override
     public boolean isVirtualAnchor() {
-        return false;
+        return true;
     }
 
     @Override
@@ -129,44 +112,26 @@ public class SvgViewShadowNode extends LayoutShadowNode {
     }
 
     private Object drawOutput() {
-        int layoutWidth = (int) getLayoutWidth();
-        int layoutHeight = (int) getLayoutHeight();
-        if(layoutHeight != 0 && layoutWidth != 0) {
-            Bitmap bitmap = Bitmap.createBitmap(
-                    layoutWidth,
-                    layoutHeight,
-                    Bitmap.Config.ARGB_8888);
+        Bitmap bitmap = Bitmap.createBitmap(
+                (int) getLayoutWidth(),
+                (int) getLayoutHeight(),
+                Bitmap.Config.ARGB_8888);
 
-            drawChildren(new Canvas(bitmap));
-            return bitmap;
-        }
-        return null;
+        mCanvas = new Canvas(bitmap);
+        drawChildren(mCanvas);
+        return bitmap;
     }
 
     Rect getCanvasBounds() {
         return mCanvas.getClipBounds();
     }
 
-    void drawChildren(final Canvas canvas) {
-        mCanvas = canvas;
+    private void drawChildren(final Canvas canvas) {
+
         if (mAlign != null) {
             RectF vbRect = getViewBox();
-            float width;
-            float height;
-            boolean nested = getNativeParent() instanceof SvgViewShadowNode;
-            if (nested) {
-                width = Float.parseFloat(mbbWidth) * mScale;
-                height = Float.parseFloat(mbbHeight) * mScale;
-            } else {
-                width = getLayoutWidth();
-                height = getLayoutHeight();
-            }
-            RectF eRect = new RectF(0,0, width, height);
-            if (nested) {
-                canvas.clipRect(eRect);
-            }
-            Matrix mViewBoxMatrix = ViewBox.getTransform(vbRect, eRect, mAlign, mMeetOrSlice);
-            mInvertible = mViewBoxMatrix.invert(mInvViewBoxMatrix);
+            RectF eRect = new RectF(0, 0, getLayoutWidth(), getLayoutHeight());
+            mViewBoxMatrix = ViewBox.getTransform(vbRect, eRect, mAlign, mMeetOrSlice);
             canvas.concat(mViewBoxMatrix);
         }
 
@@ -178,27 +143,20 @@ public class SvgViewShadowNode extends LayoutShadowNode {
 
 
         traverseChildren(new VirtualNode.NodeRunnable() {
-            public void run(ReactShadowNode node) {
-                if (node instanceof VirtualNode) {
-                    ((VirtualNode)node).saveDefinition();
-                }
+            public void run(VirtualNode node) {
+                node.saveDefinition();
             }
         });
 
         traverseChildren(new VirtualNode.NodeRunnable() {
-            public void run(ReactShadowNode lNode) {
-                if (lNode instanceof VirtualNode) {
-                    VirtualNode node = (VirtualNode)lNode;
-                    int count = node.saveAndSetupCanvas(canvas);
-                    node.draw(canvas, paint, 1f);
-                    node.restoreCanvas(canvas, count);
-                    node.markUpdateSeen();
+            public void run(VirtualNode node) {
+                int count = node.saveAndSetupCanvas(canvas);
+                node.draw(canvas, paint, 1f);
+                node.restoreCanvas(canvas, count);
+                node.markUpdateSeen();
 
-                    if (node.isResponsible() && !mResponsible) {
-                        mResponsible = true;
-                    }
-                } else {
-                    lNode.calculateLayout();
+                if (node.isResponsible() && !mResponsible) {
+                    mResponsible = true;
                 }
             }
         });
@@ -229,12 +187,9 @@ public class SvgViewShadowNode extends LayoutShadowNode {
     }
 
     int hitTest(Point point) {
-        if (!mResponsible || !mInvertible) {
+        if (!mResponsible) {
             return -1;
         }
-
-        float[] transformed = { point.x, point.y };
-        mInvViewBoxMatrix.mapPoints(transformed);
 
         int count = getChildCount();
         int viewTag = -1;
@@ -243,7 +198,7 @@ public class SvgViewShadowNode extends LayoutShadowNode {
                 continue;
             }
 
-            viewTag = ((VirtualNode) getChildAt(i)).hitTest(transformed);
+            viewTag = ((VirtualNode) getChildAt(i)).hitTest(point, mViewBoxMatrix);
             if (viewTag != -1) {
                 break;
             }
@@ -279,8 +234,11 @@ public class SvgViewShadowNode extends LayoutShadowNode {
     void traverseChildren(VirtualNode.NodeRunnable runner) {
         for (int i = 0; i < getChildCount(); i++) {
             ReactShadowNode child = getChildAt(i);
-            runner.run(child);
+            if (!(child instanceof VirtualNode)) {
+                continue;
+            }
+
+            runner.run((VirtualNode) child);
         }
     }
-
 }

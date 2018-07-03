@@ -1,16 +1,17 @@
 //noinspection JSUnresolvedVariable
-import React, { Component } from "react";
-import PropTypes from "prop-types";
+import React, {
+    Component
+} from 'react';
+import PropTypes from 'prop-types';
 import {
     ViewPropTypes,
     requireNativeComponent,
     StyleSheet,
     findNodeHandle,
     NativeModules
-} from "react-native";
-import extractViewBox from "../lib/extract/extractViewBox";
-import { ViewBoxAttributes } from "../lib/attributes";
-import { numberProp } from "../lib/props";
+} from 'react-native';
+import extractViewBox from '../lib/extract/extractViewBox';
+import {ViewBoxAttributes} from '../lib/attributes';
 
 /** @namespace NativeModules.RNSVGSvgViewManager */
 const RNSVGSvgViewManager = NativeModules.RNSVGSvgViewManager;
@@ -20,29 +21,32 @@ let id = 0;
 
 const styles = StyleSheet.create({
     svg: {
-        backgroundColor: "transparent"
+        backgroundColor: 'transparent'
     }
 });
 
-class Svg extends Component {
-    static displayName = "Svg";
+class Svg extends Component{
+    static displayName = 'Svg';
     static propTypes = {
         ...ViewPropTypes,
-        opacity: numberProp,
-        width: numberProp,
-        height: numberProp,
+        opacity: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        width: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
+        height: PropTypes.oneOfType([PropTypes.string, PropTypes.number]),
         // more detail https://svgwg.org/svg2-draft/coords.html#ViewBoxAttribute
         viewBox: PropTypes.string,
         preserveAspectRatio: PropTypes.string
     };
 
     static defaultProps = {
-        preserveAspectRatio: "xMidYMid meet"
+        preserveAspectRatio: 'xMidYMid meet'
     };
 
     constructor() {
         super(...arguments);
-        this.id = ++id;
+        id++;
+        this.id = id;
+        //noinspection JSUnusedGlobalSymbols
+        this.onDataURLCallbacks = [];
     }
     measureInWindow = (...args) => {
         this.root.measureInWindow(...args);
@@ -60,61 +64,41 @@ class Svg extends Component {
         this.root.setNativeProps(...args);
     };
 
-    toDataURL = callback => {
-        callback &&
-            RNSVGSvgViewManager.toDataURL(findNodeHandle(this.root), callback);
+    toDataURL = (callback) => {
+        callback && RNSVGSvgViewManager.toDataURL(findNodeHandle(this.root), callback);
     };
 
     render() {
-        const {
-            opacity,
-            width,
-            height,
-            viewBox,
-            preserveAspectRatio,
-            style,
-            ...props
-        } = this.props;
+        const {opacity, width, height, viewBox, preserveAspectRatio, style, ...props} = this.props;
         let dimensions;
 
         if (width && height) {
             dimensions = {
-                width: width[width.length - 1] === "%" ? width : +width,
-                height: height[height.length - 1] === "%" ? height : +height,
+                width: +width,
+                height: +height,
                 flex: 0
             };
         }
 
-        const w = `${width}`;
-        const h = `${height}`;
-
-        return (
-            <NativeSvgView
-                {...props}
-                bbWidth={w}
-                bbHeight={h}
-                {...extractViewBox({ viewBox, preserveAspectRatio })}
-                ref={ele => {
-                    this.root = ele;
-                }}
-                style={[
-                    styles.svg,
-                    style,
-                    !isNaN(+opacity) && {
-                        opacity: +opacity
-                    },
-                    dimensions
-                ]}
-            />
-        );
+        return <NativeSvgView
+            {...props}
+            {...extractViewBox({ viewBox, preserveAspectRatio })}
+            ref={ele => {this.root = ele;}}
+            style={[
+                styles.svg,
+                style,
+                !isNaN(+opacity) && {
+                    opacity: +opacity
+                },
+                dimensions
+            ]}
+        />;
     }
 }
 
-const NativeSvgView = requireNativeComponent("RNSVGSvgView", null, {
+const NativeSvgView = requireNativeComponent('RNSVGSvgView', null, {
     nativeOnly: {
-        ...ViewBoxAttributes,
-        width: true,
-        height: true
+        ...ViewBoxAttributes
     }
 });
 

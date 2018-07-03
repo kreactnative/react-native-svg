@@ -1,13 +1,13 @@
-import React from "react";
-import PropTypes from "prop-types";
-import { requireNativeComponent } from "react-native";
-import { PathAttributes } from "../lib/attributes";
-import Shape from "./Shape";
-import { pathProps } from "../lib/props";
-import extractProps from "../lib/extract/extractProps";
+import React from 'react';
+import PropTypes from 'prop-types';
+import createReactNativeComponentClass from '../lib/createReactNativeComponentClass';
+import {PathAttributes} from '../lib/attributes';
+import Shape from './Shape';
+import {pathProps} from '../lib/props';
+import extractProps from '../lib/extract/extractProps';
 
 export default class extends Shape {
-    static displayName = "Path";
+    static displayName = 'Path';
 
     static propTypes = {
         ...pathProps,
@@ -23,9 +23,7 @@ export default class extends Shape {
 
         return (
             <RNSVGPath
-                ref={ele => {
-                    this.root = ele;
-                }}
+                ref={ele => {this.root = ele;}}
                 {...extractProps(props, this)}
                 d={props.d}
             />
@@ -33,6 +31,7 @@ export default class extends Shape {
     }
 }
 
-const RNSVGPath = requireNativeComponent("RNSVGPath", null, {
-    nativeOnly: PathAttributes
-});
+const RNSVGPath = createReactNativeComponentClass('RNSVGPath', () => ({
+    validAttributes: PathAttributes,
+    uiViewClassName: 'RNSVGPath'
+}));

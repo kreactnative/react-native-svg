@@ -33,7 +33,7 @@ class DefinitionShadowNode extends VirtualNode {
     }
 
     @Override
-    public int hitTest(float[] src) {
+    public int hitTest(Point point, Matrix matrix) {
         return -1;
     }
 }
